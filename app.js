@@ -16,15 +16,17 @@ const io = new Server(server, {
 
 const users = new Map();
 
+function getCurrentPlayers() {
+    return Array.from(users.entries()).map(([id, user]) => ({ id, username: user.username, x: user.x, y: user.y }));
+}
+
 io.on('connection', (socket) => {
     console.log(`Client connected: ${socket.id}`);
 
     const username = `Player_${socket.id.substring(0, 5)}`;
     users.set(socket.id, { username });
 
-    socket.emit('current_players', Array.from(users.entries()).map(([id, user]) => ({ id, username: user.username, x: 1, y: 1 }))); // temp data
     socket.emit('connected', { id: socket.id, username });
-
 
     // Emit that the new player has connected to all other clients
     for (const [id, user] of users) {
@@ -32,6 +34,10 @@ io.on('connection', (socket) => {
             io.to(id).emit('player_connected', { id: socket.id, username, x: 1, y: 1 }); // temp data
         }
     }
+
+    socket.on('request_current_players', () => {
+        socket.emit('current_players', getCurrentPlayers());
+    })
 
     socket.on('move_player', (data) => {
         const user = users.get(socket.id);
@@ -47,12 +53,15 @@ io.on('connection', (socket) => {
         }
 
         console.log(`User ${user.username} moved to (${data.x}, ${data.y})`);
-        socket.emit('Moved', { x: data.x, y: data.y });
+        io.emit('player_moved', { username, x: data.x, y: data.y });
     })
 });
 
 io.on("disconnect", (socket) => {
     console.log(`Client disconnected: ${socket.id}`);
+
+    // Remove the user from the users map
+    users.delete(socket.id);
 });
 
 server.listen(3000, () => {
